@@ -97,3 +97,24 @@ public class AddComponentMenuAttribute : Attribute
     public string Icon { get; }
     public AddComponentMenuAttribute(string path, string icon = "") { Path = path; Icon = icon; }
 }
+
+
+[AttributeUsage(AttributeTargets.Field)]
+public class FileDialogAttribute : Attribute
+{
+     public enum DialogMode : byte
+     {
+        Files = 0,
+        Folders = 1
+    }
+
+    public DialogMode Mode { get; } = DialogMode.Files;
+    public bool OnlyInProject { get; } = false;
+    
+    public FileDialogAttribute(DialogMode mode = DialogMode.Files, bool onlyInAssets = false)
+    {
+        Mode = mode;
+        OnlyInProject = onlyInAssets;
+    }
+}
+

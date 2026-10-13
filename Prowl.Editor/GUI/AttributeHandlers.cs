@@ -7,9 +7,14 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI.PropertyEditors;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -274,6 +279,66 @@ public class TextAreaAttributeHandler : OrigamiUI.AttributeHandler
     }
 }
 
+public class FileDialogAttributeHandler : OrigamiUI.AttributeHandler
+{
+    public override bool OnDraw(Paper paper, string id, string label, Attribute attr,
+        FieldInfo field, object target, Action<object?> onChange, int depth)
+    {
+        if (field.FieldType != typeof(string))
+            return false;
+
+        var pathAttr = (FileDialogAttribute)attr;
+        string value = (string?)field.GetValue(target) ?? "";
+        int minHeight = 26;
+
+        EditorGUI.Row(paper, id, label, minHeight:minHeight, drawControl: () =>
+        {
+            using (paper.Row(id).Height(minHeight).Enter())
+            {
+                Origami.TextField(paper, $"{id}_v", (string)(value ?? string.Empty), v => onChange(v)).Height(minHeight).Show();
+                Origami.IconButton(paper, id, EditorIcons.Folder, () =>
+                {
+                    FileDialogMode mode = pathAttr.Mode == FileDialogAttribute.DialogMode.Files ?
+                        FileDialogMode.Open : FileDialogMode.SelectFolder;
+
+                    var startPath = GetStartPath(value, mode, pathAttr.OnlyInProject);
+
+                    FileDialog.Open(mode, startPath: startPath, onComplete: (s) =>
+                    {
+                        if (pathAttr.OnlyInProject)
+                        {
+                            string projectPath = Project.Current.RootPath;
+                            if (string.Equals(s, projectPath) || !s.StartsWith(projectPath, StringComparison.OrdinalIgnoreCase)) s = string.Empty;
+                            else s = s.Substring(projectPath.Length + 1);
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(s))       
+                            field.SetValue(target, s);
+                    });
+
+                })
+               .Height(26)
+               .Width(26)
+               .Show();}
+        });
+        return true;
+    }
+
+    public static string GetStartPath(string current, FileDialogMode fileDialogMode, bool isProjectRestricted)
+    {
+        if (isProjectRestricted)
+        {
+            var seperator = OperatingSystem.IsWindows() ? "\\" : "/";
+            current = $"{Project.Current.RootPath}{seperator}{current}";
+        }
+
+        if (!System.IO.Path.Exists(current))
+            return isProjectRestricted? Project.Current.AssetsPath : string.Empty;
+
+        return fileDialogMode == FileDialogMode.Open ? System.IO.Path.GetDirectoryName(current) : current;
+    }
+}
+
 /// <summary>
 /// Registers all built-in attribute handlers with the Origami AttributeHandlerRegistry.
 /// Called once at editor startup.
@@ -291,5 +356,6 @@ public static class BuiltInAttributeHandlers
         registry.Register<RangeAttribute>(new RangeAttributeHandler());
         registry.Register<TextAreaAttribute>(new TextAreaAttributeHandler());
         registry.Register<TooltipAttribute>(new TooltipAttributeHandler());
+        registry.Register<FileDialogAttribute>(new FileDialogAttributeHandler());
     }
 }
